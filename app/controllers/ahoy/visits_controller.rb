@@ -2,6 +2,8 @@ module Ahoy
   class VisitsController < ActionController::Base
     before_filter :halt_bots
 
+    protect_from_forgery except: :create
+
     def create
       visit =
         Ahoy.visit_model.new do |v|

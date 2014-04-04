@@ -23,7 +23,7 @@ module Ahoy
 end
 
 ActionController::Base.send :include, Ahoy::Controller
-ActiveRecord::Base.send(:extend, Ahoy::Model) if defined?(ActiveRecord)
+Mongoid::Document.send(:extend, Ahoy::Model) if defined?(Mongoid)
 
 if defined?(Warden)
   Warden::Manager.after_authentication do |user, auth, opts|
