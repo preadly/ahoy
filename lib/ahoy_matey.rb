@@ -11,7 +11,11 @@ require "ahoy/engine"
 module Ahoy
 
   def self.visit_model
-    ::Visit
+    @visit_model || ::Visit
+  end
+
+  def self.visit_model=(visit_model)
+    @visit_model = visit_model
   end
 
   # TODO private
@@ -26,11 +30,12 @@ ActionController::Base.send :include, Ahoy::Controller
 Mongoid::Document.send(:extend, Ahoy::Model) if defined?(Mongoid)
 
 if defined?(Warden)
-  Warden::Manager.after_authentication do |user, auth, opts|
-    request = Rack::Request.new(auth.env)
-    if request.cookies["ahoy_visit"]
-      visit = Ahoy.visit_model.where(visit_token: request.cookies["ahoy_visit"]).first
-      if visit
+  Warden::Manager.after_set_user except: :fetch do |user, auth, opts|
+    request = ActionDispatch::Request.new(auth.env)
+    visit_token = request.cookies["ahoy_visit"] || request.headers["Ahoy-Visit"]
+    if visit_token
+      visit = Ahoy.visit_model.where(visit_token: visit_token).first
+      if visit and !visit.user
         visit.user = user
         visit.save!
       end

@@ -17,6 +17,34 @@ See which campaigns generate the most revenue effortlessly.
 Order.joins(:visit).group("utm_campaign").sum(:revenue)
 ```
 
+:seedling: To track events like page views, check out [Ahoy Events](https://github.com/ankane/ahoy_events).
+
+:envelope: To track emails, check out [Ahoy Email](https://github.com/ankane/ahoy_email).
+
+## Installation
+
+Add this line to your application’s Gemfile:
+
+```ruby
+gem 'ahoy_matey'
+```
+
+And run the generator. This creates a model to store visits.
+
+```sh
+rails generate ahoy:install
+rake db:migrate
+```
+
+Lastly, include the javascript file in `app/assets/javascripts/application.js` after jQuery.
+
+```javascript
+//= require jquery
+//= require ahoy
+```
+
+We recommend using traditional analytics services like [Google Analytics](http://www.google.com/analytics/) as well.
+
 ## How It Works
 
 When someone visits your website, Ahoy creates a visit with lots of useful information.
@@ -65,13 +93,15 @@ Order.joins(:visit).group("device_type").count
 
 Ahoy automatically attaches the `current_user` to the `current_visit`.
 
+If you define your own `current_user` method, be sure to add it to `ActionController::Base`, not `ApplicationController`.
+
 With [Devise](https://github.com/plataformatec/devise), it will attach the user even if he / she signs in after the visit starts.
 
 With other authentication frameworks, add this to the end of your sign in method:
 
 ```ruby
-if current_visit
-  current_visit.user ||= current_user
+if current_visit and !current_visit.user
+  current_visit.user = current_user
   current_visit.save!
 end
 ```
@@ -109,40 +139,89 @@ http://datakick.org/?utm_medium=twitter&utm_campaign=social&utm_source=tweet123
 
 Ahoy uses [Geocoder](https://github.com/alexreisner/geocoder) for IP-based geocoding.
 
+### Multiple Subdomains
+
+To track visits across multiple subdomains, add this **before** the javascript files.
+
+```javascript
+var ahoy = {"domain": "yourdomain.com"};
+```
+
+### Development
+
+Ahoy is built with developers in mind.  You can run the following code in your browser’s console.
+
+Force a new visit
+
+```javascript
+ahoy.reset(); // then reload the page
+```
+
+Log messages
+
+```javascript
+ahoy.debug();
+```
+
+Turn off logging
+
+```javascript
+ahoy.debug(false);
+```
+
+### Native Apps [experimental]
+
+When a user launches the app, create a visit.  Send a `POST` request to `/ahoy/visits` with:
+
+- platform - `iOS`, `Android`, etc.
+- app_version - `1.0.0`
+- os_version - `7.0.6`
+- visitor_token - if you have one
+
+The endpoint will return a JSON response like:
+
+```json
+{
+  "visit_token": "8tx2ziymkwa1WlppnkqxyaBaRlXrEQ3K",
+  "visitor_token": "hYBIV0rBfrIUAiArWweiECt4N9pyiygN"
+}
+```
+
+Send the visit token in the `Ahoy-Visit` header for all requests.
+
+After 4 hours, create another visit and use the updated visit token.
+
 ### More
 
 - Excludes bots
 - Degrades gracefully when cookies are disabled
+- Don’t need a field? Just remove it from the migration
+- Visits are 4 hours by default
 
-## Installation
+## Reference
 
-Add this line to your application’s Gemfile:
+Use a different model
 
 ```ruby
-gem 'ahoy_matey'
+Ahoy.visit_model = UserVisit
 ```
 
-And run the generator. This creates a model to store visits.
-
-```sh
-rails generate ahoy:install
-rake db:migrate
-```
-
-Lastly, include the javascript file in `app/assets/javascripts/application.js` after jQuery.
+Change the platform on the web
 
 ```javascript
-//= require jquery
-//= require ahoy
+var ahoy = {"platform": "Mobile Web"}
 ```
-
-We recommend using traditional analytics services like [Google Analytics](http://www.google.com/analytics/) as well.
 
 ## TODO
 
+- track emails
 - simple dashboard
 - hook to store additional fields
 - turn off modules
+
+## History
+
+View the [changelog](https://github.com/ankane/ahoy/blob/master/CHANGELOG.md)
 
 ## Contributing
 

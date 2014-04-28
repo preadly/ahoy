@@ -3,30 +3,29 @@
 (function (window) {
   "use strict";
 
-  var debugMode = false;
-  var visitTtl, visitorTtl;
+  var ahoy = window.ahoy || window.Ahoy || {};
   var $ = window.jQuery || window.Zepto || window.$;
   var visitToken, visitorToken;
-
-  if (debugMode) {
-    visitTtl = 0.2;
-    visitorTtl = 5; // 5 minutes
-  } else {
-    visitTtl = 4 * 60; // 4 hours
-    visitorTtl = 2 * 365 * 24 * 60; // 2 years
-  }
+  var visitTtl = 4 * 60; // 4 hours
+  var visitorTtl = 2 * 365 * 24 * 60; // 2 years
+  var isReady = false;
+  var queue = [];
 
   // cookies
 
   // http://www.quirksmode.org/js/cookies.html
   function setCookie(name, value, ttl) {
     var expires = "";
+    var cookieDomain = "";
     if (ttl) {
       var date = new Date();
       date.setTime(date.getTime() + (ttl * 60 * 1000));
       expires = "; expires=" + date.toGMTString();
     }
-    document.cookie = name + "=" + value + expires + "; path=/";
+    if (ahoy.domain) {
+      cookieDomain = "; domain=" + ahoy.domain;
+    }
+    document.cookie = name + "=" + value + expires + cookieDomain + "; path=/";
   }
 
   function getCookie(name) {
@@ -45,27 +44,22 @@
     return null;
   }
 
-  // ids
-
-  // https://github.com/klughammer/node-randomstring
-  function generateToken() {
-    var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghiklmnopqrstuvwxyz';
-    var length = 32;
-    var string = '';
-    var i, randomNumber;
-
-    for (i = 0; i < length; i++) {
-      randomNumber = Math.floor(Math.random() * chars.length);
-      string += chars.substring(randomNumber, randomNumber + 1);
-    }
-
-    return string;
+  function destroyCookie(name) {
+    setCookie(name, "", -1);
   }
 
-  function debug(message) {
-    if (debugMode) {
-      window.console.log(message, visitToken, visitorToken);
+  function log(message) {
+    if (getCookie("ahoy_debug")) {
+      window.console.log(message);
     }
+  }
+
+  function setReady() {
+    var callback;
+    while (callback = queue.shift()) {
+      callback();
+    }
+    isReady = true;
   }
 
   // main
@@ -73,26 +67,19 @@
   visitToken = getCookie("ahoy_visit");
   visitorToken = getCookie("ahoy_visitor");
 
-  if (visitToken && visitorToken) {
+  if (visitToken && visitorToken && visitToken != "test") {
     // TODO keep visit alive?
-    debug("Active visit");
+    log("Active visit");
+    setReady();
   } else {
-    if (!visitorToken) {
-      visitorToken = generateToken();
-      setCookie("ahoy_visitor", visitorToken, visitorTtl);
-    }
-
-    // always generate a new visit id here
-    visitToken = generateToken();
-    setCookie("ahoy_visit", visitToken, visitTtl);
+    setCookie("ahoy_visit", "test", 1);
 
     // make sure cookies are enabled
     if (getCookie("ahoy_visit")) {
-      debug("Visit started");
+      log("Visit started");
 
       var data = {
-        visit_token: visitToken,
-        visitor_token: visitorToken,
+        platform: ahoy.platform || "Web",
         landing_page: window.location.href
       };
 
@@ -101,12 +88,47 @@
         data.referrer = document.referrer;
       }
 
-      debug(data);
+      if (visitorToken) {
+        data.visitor_token = visitorToken;
+      }
 
-      $.post("/ahoy/visits", data);
+      log(data);
+
+      $.post("/ahoy/visits", data, function(response) {
+        setCookie("ahoy_visit", response.visit_token, visitTtl);
+        setCookie("ahoy_visitor", response.visitor_token, visitorTtl);
+        setReady();
+      }, "json");
     } else {
-      debug("Cookies disabled");
+      log("Cookies disabled");
+      setReady();
     }
   }
 
+  ahoy.reset = function () {
+    destroyCookie("ahoy_visit");
+    destroyCookie("ahoy_visitor");
+    return true;
+  };
+
+  ahoy.debug = function (enabled) {
+    if (enabled === false) {
+      destroyCookie("ahoy_debug");
+    } else {
+      setCookie("ahoy_debug", "t", 365 * 24 * 60); // 1 year
+    }
+    return true;
+  };
+
+  ahoy.log = log;
+
+  ahoy.ready = function (callback) {
+    if (isReady) {
+      callback();
+    } else {
+      queue.push(callback);
+    }
+  };
+
+  window.ahoy = ahoy;
 }(window));
